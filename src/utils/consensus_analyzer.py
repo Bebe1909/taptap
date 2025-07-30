@@ -9,23 +9,27 @@ across different processing methods and image enhancements.
 
 import sys
 import os
-sys.path.append('src/utils')
-
-from advanced_data_extraction import generate_consensus_report, analyze_debug_images_consensus
+from advanced_data_extraction import TapTapDataExtractor, ConsensusAnalyzer
 
 def main():
+    
     """Main function to run consensus analysis"""
     print("🔍 TapTap Debug Images Consensus Analyzer")
     print("=" * 50)
     
-    # Check if debug_images folder exists
-    if not os.path.exists("debug_images"):
+    # Check if debug_images folder exists (look in parent directory)
+    debug_folder = "../../debug_images"
+    if not os.path.exists(debug_folder):
         print("❌ Debug folder not found. Please run debug_image_processing.py first.")
         print("   Make sure you have debug_images/ folder with subfolders for each region.")
         return
     
+    # Create extractor and analyzer instances
+    extractor = TapTapDataExtractor()
+    analyzer = ConsensusAnalyzer(extractor)
+    
     # Run the full consensus analysis
-    generate_consensus_report()
+    analyzer.generate_consensus_report()
     
     print("\n🎯 SUMMARY:")
     print("=" * 50)
