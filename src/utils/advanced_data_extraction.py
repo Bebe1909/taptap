@@ -11,6 +11,7 @@ import os
 import cv2
 import pytesseract
 import re
+from collections import Counter, defaultdict
 
 def extract_lisa_data_v2(image_path: str):
     """Extract data using v2 method with people count detection"""
@@ -261,6 +262,245 @@ def extract_from_clahe_advanced():
 
     return results
 
+def analyze_debug_images_consensus():
+    """
+    Analyze all debug images and find the most consistent results across different processing methods.
+    Returns the best result for each region based on frequency analysis.
+    """
+    debug_folder = "./debug_images"
+    results = {}
+    
+    if not os.path.exists(debug_folder):
+        print("❌ Debug folder not found. Please run debug_image_processing.py first.")
+        return results
+    
+    regions = ['daroka', 'lexi', 'mafer']
+    
+    for region in regions:
+        print(f"\n🔍 Analyzing {region.upper()} region...")
+        print("-" * 50)
+        
+        region_folder = os.path.join(debug_folder, region)
+        if not os.path.exists(region_folder):
+            print(f"❌ Region folder {region} not found")
+            continue
+        
+        # Get all PNG files in the region folder
+        image_files = [f for f in os.listdir(region_folder) if f.endswith('.png')]
+        
+        if not image_files:
+            print(f"❌ No PNG files found in {region}")
+            continue
+        
+        print(f"📁 Found {len(image_files)} debug images")
+        
+        # Extract data from all images using all methods
+        all_results = []
+        for filename in image_files:
+            full_path = os.path.join(region_folder, filename)
+            # Extract processing method from filename (remove common prefix and suffix)
+            processing_method = filename.replace(f'screenshot_20250730_173118_{region}_cropped_', '').replace('.png', '')
+            
+            # Extract using all three methods
+            result_v2 = extract_lisa_data_v2(full_path)
+            result_v3 = extract_game_stat_v3(full_path)
+            result_v4 = extract_stat_v4(full_path)
+            
+            result_entry = {
+                'file': filename,
+                'processing_method': processing_method,
+                'v2': result_v2.get('mapped_result', {}),
+                'v3': result_v3.get('mapped_result', {}),
+                'v4': result_v4.get('mapped_result', {}),
+                'raw_v2': result_v2.get('raw_text', ''),
+                'raw_v3': result_v3.get('raw_text', ''),
+                'raw_v4': result_v4.get('raw_text', '')
+            }
+            
+            all_results.append(result_entry)
+            
+            # Print individual results
+            print(f"  {processing_method:25} | V2: B:{result_entry['v2'].get('b_value', ''):>3} S:{result_entry['v2'].get('s_value', ''):>3} T:{result_entry['v2'].get('t_value', ''):>2} 👥:{result_entry['v2'].get('people_count', ''):>3} 💰:{result_entry['v2'].get('dollar_amount', '')}")
+            print(f"  {'':25} | V3: B:{result_entry['v3'].get('b_value', ''):>3} S:{result_entry['v3'].get('s_value', ''):>3} T:{result_entry['v3'].get('t_value', ''):>2} 👥:{result_entry['v3'].get('people_count', ''):>3} 💰:{result_entry['v3'].get('dollar_amount', '')}")
+            print(f"  {'':25} | V4: B:{result_entry['v4'].get('b_value', ''):>3} S:{result_entry['v4'].get('s_value', ''):>3} T:{result_entry['v4'].get('t_value', ''):>2} 👥:{result_entry['v4'].get('people_count', ''):>3} 💰:{result_entry['v4'].get('dollar_amount', '')}")
+        
+        # Find consensus for each field
+        consensus_result = find_consensus(all_results)
+        results[region] = consensus_result
+        
+        print(f"\n✅ {region.upper()} CONSENSUS RESULT:")
+        print(f"   B: {consensus_result['b_value']:>3} | S: {consensus_result['s_value']:>3} | T: {consensus_result['t_value']:>2} | 👥: {consensus_result['people_count']:>3} | 💰: {consensus_result['dollar_amount']}")
+        print(f"   Best method: {consensus_result['best_method']}")
+        print(f"   Confidence: {consensus_result['confidence']:.1f}%")
+    
+    return results
+
+def find_consensus(all_results):
+    """
+    Find the most consistent values across all results using frequency analysis.
+    """
+    fields = ['b_value', 's_value', 't_value', 'people_count', 'dollar_amount']
+    consensus = {}
+    
+    # Collect all values for each field and method
+    field_values = defaultdict(lambda: defaultdict(list))
+    
+    for result in all_results:
+        for method in ['v2', 'v3', 'v4']:
+            for field in fields:
+                value = result[method].get(field, '')
+                if value:  # Only count non-empty values
+                    field_values[field][method].append(value)
+    
+    # Find most common value for each field
+    for field in fields:
+        all_values = []
+        for method in ['v2', 'v3', 'v4']:
+            all_values.extend(field_values[field][method])
+        
+        if all_values:
+            # Count frequency of each value
+            value_counts = Counter(all_values)
+            most_common_value, count = value_counts.most_common(1)[0]
+            total_count = len(all_values)
+            confidence = (count / total_count) * 100
+            
+            consensus[field] = most_common_value
+            consensus[f'{field}_confidence'] = confidence
+            consensus[f'{field}_count'] = count
+            consensus[f'{field}_total'] = total_count
+        else:
+            consensus[field] = ''
+            consensus[f'{field}_confidence'] = 0
+            consensus[f'{field}_count'] = 0
+            consensus[f'{field}_total'] = 0
+    
+    # Determine best method based on overall confidence
+    method_scores = {}
+    for method in ['v2', 'v3', 'v4']:
+        method_score = 0
+        method_total = 0
+        for field in fields:
+            if field_values[field][method]:
+                method_score += len(field_values[field][method])
+                method_total += 1
+        
+        if method_total > 0:
+            method_scores[method] = method_score / method_total
+        else:
+            method_scores[method] = 0
+    
+    best_method = max(method_scores, key=method_scores.get)
+    overall_confidence = sum(consensus[f'{field}_confidence'] for field in fields) / len(fields)
+    
+    consensus['best_method'] = best_method
+    consensus['confidence'] = overall_confidence
+    
+    return consensus
+
+def generate_consensus_report():
+    """
+    Generate a comprehensive report of consensus analysis from debug images.
+    """
+    print("🚀 DEBUG IMAGES CONSENSUS ANALYSIS")
+    print("=" * 60)
+    
+    results = analyze_debug_images_consensus()
+    
+    if not results:
+        print("❌ No results to report")
+        return
+    
+    print("\n📊 FINAL CONSENSUS REPORT")
+    print("=" * 60)
+    
+    for region, consensus in results.items():
+        print(f"\n{region.upper()}:")
+        print(f"  B: {consensus['b_value']:>3} (confidence: {consensus['b_value_confidence']:.1f}%, {consensus['b_value_count']}/{consensus['b_value_total']})")
+        print(f"  S: {consensus['s_value']:>3} (confidence: {consensus['s_value_confidence']:.1f}%, {consensus['s_value_count']}/{consensus['s_value_total']})")
+        print(f"  T: {consensus['t_value']:>2} (confidence: {consensus['t_value_confidence']:.1f}%, {consensus['t_value_count']}/{consensus['t_value_total']})")
+        print(f"  👥: {consensus['people_count']:>3} (confidence: {consensus['people_count_confidence']:.1f}%, {consensus['people_count_count']}/{consensus['people_count_total']})")
+        print(f"  💰: {consensus['dollar_amount']} (confidence: {consensus['dollar_amount_confidence']:.1f}%, {consensus['dollar_amount_count']}/{consensus['dollar_amount_total']})")
+        print(f"  Best method: {consensus['best_method']}")
+        print(f"  Overall confidence: {consensus['confidence']:.1f}%")
+    
+    # Save results to CSV
+    save_consensus_to_csv(results)
+    
+    print("\n✅ Consensus analysis complete!")
+
+def save_consensus_to_csv(results):
+    """
+    Save consensus results to CSV file.
+    """
+    import csv
+    
+    csv_filename = "consensus_results.csv"
+    
+    with open(csv_filename, 'w', newline='', encoding='utf-8') as csvfile:
+        fieldnames = ['region', 'b_value', 'b_confidence', 's_value', 's_confidence', 
+                     't_value', 't_confidence', 'people_count', 'people_confidence',
+                     'dollar_amount', 'dollar_confidence', 'best_method', 'overall_confidence']
+        
+        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+        writer.writeheader()
+        
+        for region, consensus in results.items():
+            row = {
+                'region': region,
+                'b_value': consensus['b_value'],
+                'b_confidence': f"{consensus['b_value_confidence']:.1f}%",
+                's_value': consensus['s_value'],
+                's_confidence': f"{consensus['s_value_confidence']:.1f}%",
+                't_value': consensus['t_value'],
+                't_confidence': f"{consensus['t_value_confidence']:.1f}%",
+                'people_count': consensus['people_count'],
+                'people_confidence': f"{consensus['people_count_confidence']:.1f}%",
+                'dollar_amount': consensus['dollar_amount'],
+                'dollar_confidence': f"{consensus['dollar_amount_confidence']:.1f}%",
+                'best_method': consensus['best_method'],
+                'overall_confidence': f"{consensus['confidence']:.1f}%"
+            }
+            writer.writerow(row)
+    
+    print(f"💾 Results saved to {csv_filename}")
+
+def get_consensus_results():
+    """
+    Get consensus results in a simple format.
+    Returns a dictionary with the best results for each region.
+    """
+    results = analyze_debug_images_consensus()
+    
+    # Format results in a clean way
+    formatted_results = {}
+    for region, consensus in results.items():
+        formatted_results[region] = {
+            'b_value': consensus['b_value'],
+            's_value': consensus['s_value'], 
+            't_value': consensus['t_value'],
+            'people_count': consensus['people_count'],
+            'dollar_amount': consensus['dollar_amount'],
+            'confidence': consensus['confidence'],
+            'best_method': consensus['best_method']
+        }
+    
+    return formatted_results
+
+def print_simple_consensus():
+    """
+    Print consensus results in a simple, clean format.
+    """
+    results = get_consensus_results()
+    
+    print("🎯 FINAL CONSENSUS RESULTS")
+    print("=" * 50)
+    
+    for region, data in results.items():
+        print(f"{region.upper()}: B: {data['b_value']:>3} | S: {data['s_value']:>3} | T: {data['t_value']:>2} | 👥: {data['people_count']:>3} | 💰: {data['dollar_amount']}")
+        print(f"   Confidence: {data['confidence']:.1f}% | Best Method: {data['best_method']}")
+        print()
+
 def main():
     """Main function to run advanced data extraction"""
     print("🚀 Advanced Data Extraction from TapTap Images")
@@ -303,6 +543,11 @@ def main():
             print(f"   Raw V3: '{result.get('raw_text_v3', '')[:50]}...'")
             print(f"   Raw V4: '{result.get('raw_text_v4', '')[:50]}...'")
             print()
+    
+    # Run consensus analysis
+    print("\n🔍 Running consensus analysis on debug images...")
+    print("-" * 50)
+    generate_consensus_report()
     
     print("✅ Advanced data extraction complete!")
 
