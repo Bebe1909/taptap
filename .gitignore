@@ -68,6 +68,8 @@ dataset/images/
 dataset/labels/
 dataset/train/
 dataset/val/
+images/*
+debug_images/*
 
 # Model weights (if large)
 *.weights
