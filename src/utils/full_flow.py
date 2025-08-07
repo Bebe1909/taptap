@@ -152,9 +152,23 @@ def crop_all_screenshots():
 
         # Crop each region
         for name, x1, y1, x2, y2 in regions:
-            cropped = img[y1:y2, x1:x2]
-            cropped_filename = f"images/{base_name}_{name}_cropped.png"
-            cv2.imwrite(cropped_filename, cropped)
+            # Check bounds to prevent OpenCV errors
+            height, width = img.shape[:2]
+            x1 = max(0, min(x1, width))
+            y1 = max(0, min(y1, height))
+            x2 = max(0, min(x2, width))
+            y2 = max(0, min(y2, height))
+            
+            # Ensure valid crop region
+            if x1 < x2 and y1 < y2:
+                cropped = img[y1:y2, x1:x2]
+                if cropped.size > 0:  # Check if cropped image is not empty
+                    cropped_filename = f"images/{base_name}_{name}_cropped.png"
+                    cv2.imwrite(cropped_filename, cropped)
+                else:
+                    print(f"    ⚠️ Empty crop for {name} in {screenshot_file}")
+            else:
+                print(f"    ⚠️ Invalid crop coordinates for {name} in {screenshot_file}")
 
         print(f"    ✅ Cropped: {screenshot_file}")
 

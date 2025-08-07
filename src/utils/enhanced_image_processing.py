@@ -220,6 +220,54 @@ class EnhancedImageProcessor:
         
         return processed_images
     
+    def process_image_optimized(self, image: np.ndarray) -> Dict[str, np.ndarray]:
+        """
+        Optimized image processing that only generates the 3 best methods:
+        - processed_17 (custom method)
+        - gaussian_blur (noise reduction)
+        - adaptive_binarized (adaptive thresholding)
+        """
+        processed_images = {}
+        
+        try:
+            # Convert to grayscale if needed
+            if len(image.shape) == 3:
+                gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+            else:
+                gray = image.copy()
+            
+            # Method 1: processed_17 (custom method - enhanced with CLAHE + adaptive threshold)
+            clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
+            clahe_enhanced = clahe.apply(gray)
+            processed_17 = cv2.adaptiveThreshold(
+                clahe_enhanced, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, 
+                cv2.THRESH_BINARY, 11, 2
+            )
+            processed_images['processed_17'] = processed_17
+            
+            # Method 2: gaussian_blur (noise reduction)
+            gaussian_blur = cv2.GaussianBlur(gray, (3, 3), 0)
+            processed_images['gaussian_blur'] = gaussian_blur
+            
+            # Method 3: adaptive_binarized (adaptive thresholding)
+            adaptive_binarized = cv2.adaptiveThreshold(
+                gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, 
+                cv2.THRESH_BINARY, 11, 2
+            )
+            processed_images['adaptive_binarized'] = adaptive_binarized
+            
+        except Exception as e:
+            print(f"    ⚠️ Optimized image processing failed: {e}")
+            # Fallback to basic processing
+            if len(image.shape) == 3:
+                gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+            else:
+                gray = image.copy()
+            _, thresh = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+            processed_images['fallback'] = thresh
+        
+        return processed_images
+    
     def extract_text_from_processed_images(self, processed_images: List[np.ndarray]) -> List[str]:
         """Extract text from all processed images"""
         all_texts = []
@@ -296,6 +344,92 @@ class EnhancedImageProcessor:
             "people_count": "0",
             "dollar_amount": "0"
         }
+
+    def extract_data_from_image_optimized(self, image_path: str) -> Dict[str, any]:
+        """Extract data using optimized image processing (only 3 best methods)"""
+        # Load image
+        image = cv2.imread(image_path)
+        if image is None:
+            return {}
+        
+        # Get image dimensions
+        height, width = image.shape[:2]
+        print(f"    📏 Original image size: {width}x{height}")
+        
+        # Apply optimized image processing (only 3 methods)
+        processed_images = self.process_image_optimized(image)
+        print(f"    🔧 Generated {len(processed_images)} optimized processed images")
+        
+        # Extract text from optimized processed images
+        all_texts = []
+        for method_name, processed_img in processed_images.items():
+            for config in self.tesseract_configs:
+                try:
+                    text = pytesseract.image_to_string(processed_img, config=config)
+                    if text.strip():
+                        all_texts.append(text.strip())
+                except Exception as e:
+                    continue
+        
+        print(f"    📝 Extracted {len(all_texts)} text samples")
+        
+        # Extract numbers from all texts
+        numbers = []
+        for text in all_texts:
+            number_matches = re.findall(r'\d+', text)
+            for match in number_matches:
+                try:
+                    numbers.append(int(match))
+                except ValueError:
+                    continue
+        
+        # Find most common numbers
+        from collections import Counter
+        if numbers:
+            counter = Counter(numbers)
+            common_numbers = [num for num, count in counter.most_common() if count >= 1]
+            print(f"    🔢 Found numbers: {common_numbers[:20]}...")  # Show first 20
+            
+            # Extract data using the same logic as the original
+            if len(common_numbers) >= 5:
+                b_value = str(common_numbers[0])
+                s_value = str(common_numbers[1])
+                t_value = str(common_numbers[2])
+                people_count = str(common_numbers[3])
+                dollar_amount = str(common_numbers[4])
+            else:
+                # Fallback if not enough numbers
+                b_value = str(common_numbers[0]) if common_numbers else '0'
+                s_value = str(common_numbers[1]) if len(common_numbers) > 1 else '0'
+                t_value = str(common_numbers[2]) if len(common_numbers) > 2 else '0'
+                people_count = str(common_numbers[3]) if len(common_numbers) > 3 else '0'
+                dollar_amount = str(common_numbers[4]) if len(common_numbers) > 4 else '0'
+        else:
+            b_value = s_value = t_value = people_count = dollar_amount = '0'
+        
+        # Extract region and timestamp from filename
+        filename = os.path.basename(image_path)
+        region = 'cropped'  # Default
+        timestamp = filename.replace('.png', '')
+        
+        if '_cropped.png' in filename:
+            region = filename.split('_cropped.png')[0].split('_')[-1]
+            timestamp = '_'.join(filename.split('_')[:-2])
+        
+        result = {
+            'b_value': b_value,
+            's_value': s_value,
+            't_value': t_value,
+            'people_count': people_count,
+            'dollar_amount': dollar_amount,
+            'region': region,
+            'filename': filename,
+            'timestamp': timestamp,
+            'processing_methods': list(processed_images.keys())
+        }
+        
+        print(f"    ✅ Extracted data: {result}")
+        return result
 
 def extract_all_data_enhanced():
     """Enhanced data extraction using comprehensive image processing"""

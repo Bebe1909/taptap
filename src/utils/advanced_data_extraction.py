@@ -255,10 +255,10 @@ class TapTapDataExtractor:
     def extract_from_clahe_advanced(self) -> List[Dict]:
         """Extract data from CLAHE enhanced images using advanced methods"""
         results = []
-        debug_folder = "../../debug_images"
+        debug_folder = "../../images"
 
         if not os.path.exists(debug_folder):
-            print("❌ Debug folder not found. Please run debug_image_processing.py first.")
+            print("❌ Images folder not found. Please run the continuous monitoring first to generate images.")
             return results
 
         for region in self.regions:
@@ -290,11 +290,11 @@ class ConsensusAnalyzer:
         Analyze all debug images and find the most consistent results across different processing methods.
         Returns the best result for each region based on frequency analysis.
         """
-        debug_folder = "../../debug_images"
+        debug_folder = "../../images"
         results = {}
         
         if not os.path.exists(debug_folder):
-            print("❌ Debug folder not found. Please run debug_image_processing.py first.")
+            print("❌ Images folder not found. Please run the continuous monitoring first to generate images.")
             return results
         
         for region in self.regions:
@@ -529,24 +529,24 @@ class OptimizedConsensusAnalyzer(ConsensusAnalyzer):
         """Initialize the optimized analyzer."""
         super().__init__(extractor)
         self.method_priority = {
-            'otsu_binarized': 1,      # Usually very effective
-            'clahe_enhanced': 2,      # Good for contrast issues
-            'original': 3,            # Baseline
-            'histogram_equalized': 4, # Good for brightness issues
+            # 'otsu_binarized': 1,      # Usually very effective
+            # 'clahe_enhanced': 2,      # Good for contrast issues
+            # 'original': 3,            # Baseline
+            # 'histogram_equalized': 4, # Good for brightness issues
             'adaptive_binarized': 5,  # Good for varying lighting
-            'gamma_corrected': 6,     # Good for dark images
-            'denoised': 7,           # Good for noisy images
-            'median_blur': 8,        # Good for salt-and-pepper noise
-            'bilateral_filter': 9,    # Good for edge preservation
-            'opening': 10,           # Morphological operations
-            'closing': 11,
-            'dilated': 12,
-            'eroded': 13,
-            'deskewed': 14,          # Good for rotated text
-            'bordered': 15,          # Good for edge text
-            'rescaled': 16,          # Basic scaling
+            # 'gamma_corrected': 6,     # Good for dark images
+            # 'denoised': 7,           # Good for noisy images
+            # 'median_blur': 8,        # Good for salt-and-pepper noise
+            # 'bilateral_filter': 9,    # Good for edge preservation
+            # 'opening': 10,           # Morphological operations
+            # 'closing': 11,
+            # 'dilated': 12,
+            # 'eroded': 13,
+            # 'deskewed': 14,          # Good for rotated text
+            # 'bordered': 15,          # Good for edge text
+            # 'rescaled': 16,          # Basic scaling
             'gaussian_blur': 17,     # May blur text too much
-            'adaptive2_binarized': 18, # Alternative method
+            # 'adaptive2_binarized': 18, # Alternative method
             'processed_17': 19       # Custom method (lowest priority)
         }
     
@@ -558,11 +558,11 @@ class OptimizedConsensusAnalyzer(ConsensusAnalyzer):
             sample_size: Number of most promising images to process (default: 5)
             confidence_threshold: Stop processing if confidence reaches this level (default: 80%)
         """
-        debug_folder = "../../debug_images"
+        debug_folder = "../../images"
         results = {}
         
         if not os.path.exists(debug_folder):
-            print("❌ Debug folder not found. Please run debug_image_processing.py first.")
+            print("❌ Images folder not found. Please run the continuous monitoring first to generate images.")
             return results
         
         for region in self.regions:
