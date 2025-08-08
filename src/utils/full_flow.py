@@ -12,7 +12,6 @@ import time
 import os
 from datetime import datetime
 from pathlib import Path
-from playwright.sync_api import sync_playwright
 import cv2
 import csv
 
@@ -51,74 +50,21 @@ def run_full_flow():
 def run_web_automation_with_screenshots():
     """Run web automation and take screenshots every 5 seconds for 10 iterations"""
 
-    # Create images directory if it doesn't exist
-    images_dir = Path("images")
-    images_dir.mkdir(exist_ok=True)
+    # Import shared browser utilities
+    from src.utils.browser_utils import initialize_browser_and_navigate, take_screenshot
 
-    with sync_playwright() as p:
-        browser = p.chromium.launch(headless=False)
-        context = browser.new_context()
-        page = context.new_page()
+    # Initialize browser and navigate to game page
+    browser, page = initialize_browser_and_navigate()
+    if not browser or not page:
+        print("❌ Failed to initialize browser")
+        return
 
-        # Go to page
-        print("  → Navigating to TapTap...")
-        page.goto("https://www.taptap.asia/vi-vn")
-
-        # Click button in popup (if needed)
-        dialog_button = page.locator("xpath=//div[contains(@class,'priority-dialog-content')]/div[1]/button")
-        if dialog_button.is_visible():
-            dialog_button.click()
-
-        # Select menu item: Casino trực tuyến
-        print("  → Selecting casino menu...")
-        item_menu = page.locator("xpath=//nav[contains(@class,'responsive-menu')]//li[a[text()='casino trực tuyến']]")
-        if item_menu.is_visible():
-            item_menu.click()
-
-        # Scroll to: Trending Game
-        trending_game = page.locator("xpath=//div[text()='Xu Hướng Nổi Bật']")
-        trending_game.scroll_into_view_if_needed()
-
-        # Select game to monitor: Bacarat
-        print("  → Selecting game...")
-        taixiu_game = page.locator(
-            "xpath=//div[contains(@class,'trending-games')]//div[contains(@class,'s-slide-catalog')]//div[contains(@class,'swiper-slide')][1]")
-        taixiu_game.click()
-
-        # Login
-        print("  → Logging in...")
-        page.fill("//input[@aria-label='Tên truy cập / Email']", "killer_hitman2308@yahoo.com")
-        page.fill("//input[@aria-label='Mật Khẩu']", "Tester123456")
-        page.locator("xpath=//button[@data-content-name='Log In - Options - (MK-CTA)']").click()
-
-        # Wait and close
-        time.sleep(20)
-
-        # Click agree to accept currency (with error handling)
-        try:
-            dialog_button = page.locator("xpath=//div[contains(@class,'s-dialog-content')]//button")
-            if dialog_button.is_visible(timeout=5000):
-                dialog_button.click()
-        except:
-            print("  → No dialog found, continuing...")
-
-        time.sleep(10)
-        
-        # Navigate to game page with error handling
-        try:
-            page.goto("https://bpcdf.vesnamex777.com/player/webMain.jsp?dm=1&title=1", timeout=30000)
-            page.wait_for_timeout(10000)
-        except Exception as e:
-            print(f"  → Navigation error: {e}")
-            # Continue anyway to take screenshot
-
+    try:
         # Take 1 screenshot
         print("  → Taking 1 screenshot...")
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        screenshot_path = f"images/screenshot_{timestamp}.png"
-        page.screenshot(path=screenshot_path, full_page=True)
+        screenshot_path = take_screenshot(page)
         print(f"    📸 Screenshot: {screenshot_path}")
-
+    finally:
         browser.close()
 
 
